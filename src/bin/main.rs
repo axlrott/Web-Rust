@@ -2,14 +2,37 @@ use std::{
     fs,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+    thread,
 };
+
+use web_rust::thread_pool::ThreadPool;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let pool = ThreadPool::new(4);
+    let shutdown = Arc::new(Mutex::new(false));
+    let exit_command = String::from("exit\n");
 
+    let shutdown_copy = Arc::clone(&shutdown);
+    thread::spawn(move || loop {
+        println!("Waiting for input");
+        let mut command = String::new();
+        let _ = std::io::stdin().read_line(&mut command).unwrap();
+        if command == exit_command {
+            println!("Execute exit command");
+            *shutdown_copy.lock().unwrap() = true;
+        }
+    });
     for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        handle_connection(stream);
+        if let Ok(stream) = stream {
+            pool.execute(|| {
+                handle_connection(stream);
+            });
+        };
+        if *shutdown.lock().unwrap() {
+            break;
+        }
     }
 }
 
