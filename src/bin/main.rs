@@ -1,18 +1,20 @@
 use std::{
     fs,
-    io::{Read, Write},
+    io::{ErrorKind, Read, Write},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
+    time::Duration,
 };
 
 use web_rust::thread_pool::ThreadPool;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let _ = listener.set_nonblocking(true);
     let pool = ThreadPool::new(4);
     let shutdown = Arc::new(Mutex::new(false));
-    let exit_command = String::from("exit\n");
+    let exit_command = String::from("q\n");
 
     let shutdown_copy = Arc::clone(&shutdown);
     thread::spawn(move || loop {
@@ -24,15 +26,24 @@ fn main() {
             *shutdown_copy.lock().unwrap() = true;
         }
     });
-    for stream in listener.incoming() {
-        if let Ok(stream) = stream {
-            pool.execute(|| {
-                handle_connection(stream);
-            });
+    loop {
+        match listener.accept() {
+            Ok((stream, sock_addr)) => {
+                println!("Conected to {}", sock_addr);
+                pool.execute(|| {
+                    handle_connection(stream);
+                });
+            }
+            Err(error) => {
+                if error.kind() == ErrorKind::WouldBlock {
+                    if *shutdown.lock().unwrap() {
+                        break;
+                    } else {
+                        thread::sleep(Duration::from_secs(1));
+                    }
+                }
+            }
         };
-        if *shutdown.lock().unwrap() {
-            break;
-        }
     }
 }
 
