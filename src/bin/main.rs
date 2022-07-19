@@ -1,15 +1,16 @@
 use std::{
+    error::Error,
     fs,
     io::{ErrorKind, Read, Write},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
-    time::Duration, error::Error,
+    time::Duration,
 };
 
-use web_rust::thread_pool::ThreadPool;
+use web_rust::{announce_decoder::Announce, thread_pool::ThreadPool};
 
-fn main() -> Result<(), Box<dyn Error>>{
+fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
     let _ = listener.set_nonblocking(true);
     let pool = ThreadPool::new(4);
@@ -48,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>>{
                             if *mutex {
                                 break;
                             }
-                        },
+                        }
                         _ => (), //Ver que hacer en casos de error
                     }
                     thread::sleep(Duration::from_secs(1));
@@ -59,14 +60,21 @@ fn main() -> Result<(), Box<dyn Error>>{
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
+fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let mut buffer = [0; 1024];
     let _ = stream.read(&mut buffer);
 
     let get = b"GET / HTTP/1.1\r\n";
+    let get_announce = b"GET /announce";
 
     let (status_line, filename) = if buffer.starts_with(get) {
         ("HTTP/1.1 200 OK", "index.html")
+    } else if buffer.starts_with(get_announce) {
+        //Desencodear el announce de querystring y escribir lo importante en bencoding dentro del announce.html
+        //Otros datos importantes del announce almacenarlos [en un .json quizas?]
+        let announce = Announce::new(buffer.clone().to_vec());
+        announce.get_announce_str();
+        ("HTTP/1.1 200 OK", "announce.html")
     } else {
         ("HTTP/1.1 404 NOT FOUND", "404.html")
     };
