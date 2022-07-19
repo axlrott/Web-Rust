@@ -70,8 +70,8 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let (status_line, filename) = if buffer.starts_with(get) {
         ("HTTP/1.1 200 OK", "index.html")
     } else if buffer.starts_with(get_announce) {
-        //Desencodear el announce de querystring y escribir lo importante en bencoding dentro del announce.html
-        //Otros datos importantes del announce almacenarlos [en un .json quizas?]
+        //Desencodear el announce de querystring, verificar que el info_hash sea de un .torrent valido
+        //Almacenar datos importantes [.jason?] y devolver los peers junto con la info de seeders y leechers
         let announce = Announce::new(buffer.clone().to_vec());
         announce.get_announce_str();
         ("HTTP/1.1 200 OK", "announce.html")

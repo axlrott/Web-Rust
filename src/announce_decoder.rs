@@ -1,3 +1,5 @@
+use std::{fs::File, io::Write};
+
 pub const INFO_HASH: &str = "info_hash=";
 pub const PEER_ID: &str = "peer_id=";
 pub const DOWNLOADED: &str = "downloaded=";
@@ -62,10 +64,18 @@ impl Announce {
     }
 
     pub fn get_announce_str(&self) {
-        println!("INFO_HASH: {}", String::from_utf8_lossy(&self.info_hash));
-        println!("PEER_ID: {}", String::from_utf8_lossy(&self.peer_id));
-        println!("DOWNLOADED: {}", self.downloaded);
-        println!("UPLOADED: {}", self.uploaded);
-        println!("LEFT: {}", self.left);
+        let mut log_file = File::create("announce.html").unwrap();
+
+        let a = format!(
+            "INFO_HASH: {}\nPEER_ID: {}\nDOWNLOADED: {}\nUPLOADED: {}\nLEFT: {}\n",
+            String::from_utf8_lossy(&self.info_hash),
+            String::from_utf8_lossy(&self.peer_id),
+            self.downloaded,
+            self.uploaded,
+            self.left
+        );
+
+        let _ = log_file.write_all(a.as_bytes());
+        let _ = log_file.flush();
     }
 }
