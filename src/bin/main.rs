@@ -8,7 +8,10 @@ use std::{
     time::Duration,
 };
 
-use web_rust::{announce_decoder::Announce, thread_pool::ThreadPool};
+use web_rust::{
+    announce_decoder::{get_announce_error, get_announce_str, Announce},
+    thread_pool::ThreadPool,
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
@@ -71,9 +74,13 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         ("HTTP/1.1 200 OK", "index.html")
     } else if buffer.starts_with(get_announce) {
         //Desencodear el announce de querystring, verificar que el info_hash sea de un .torrent valido
-        //Almacenar datos importantes [.jason?] y devolver los peers junto con la info de seeders y leechers
+        //Y que los datos obligatorios esten en el announce.
+        //Almacenar datos importantes [en .json?] y devolver los peers junto con la info de seeders y leechers
         let announce = Announce::new(buffer.clone().to_vec());
-        announce.get_announce_str();
+        match announce {
+            Ok(announce) => get_announce_str(announce),
+            Err(error) => get_announce_error(error),
+        };
         ("HTTP/1.1 200 OK", "announce.html")
     } else {
         ("HTTP/1.1 404 NOT FOUND", "404.html")

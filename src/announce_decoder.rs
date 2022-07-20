@@ -10,9 +10,10 @@ pub const EVENT: &str = "event=";
 pub const IP: &str = "ip=";
 pub const COMPACT: &str = "compact=";
 
-fn find_index_msg(response: &[u8], size: usize, end_line: &[u8]) -> Option<usize> {
-    let first_pos = response.windows(size).position(|arr| arr == end_line);
-    first_pos.map(|pos| pos + size)
+pub enum AnnounceError {
+    InfoHash,
+    PeerId,
+    Port,
 }
 
 pub struct Announce {
@@ -27,6 +28,11 @@ pub struct Announce {
     ip: Option<Vec<u8>>,
     compact: Option<Vec<u8>>,
     event: Option<Vec<u8>>,
+}
+
+fn find_index_msg(response: &[u8], size: usize, end_line: &[u8]) -> Option<usize> {
+    let first_pos = response.windows(size).position(|arr| arr == end_line);
+    first_pos.map(|pos| pos + size)
 }
 
 fn take_result(announce: &[u8]) -> Vec<u8> {
@@ -57,10 +63,19 @@ fn init_command_u64(announce: &[u8], size_command: usize, command: &str) -> u64 
 }
 
 impl Announce {
-    pub fn new(announce: Vec<u8>) -> Self {
-        let info_hash = init_command_vec(&announce, INFO_HASH.len(), INFO_HASH).unwrap();
-        let peer_id = init_command_vec(&announce, PEER_ID.len(), PEER_ID).unwrap();
-        let port = init_command_u64(&announce, PORT.len(), PORT);
+    pub fn new(announce: Vec<u8>) -> Result<Self, AnnounceError> {
+        let info_hash = match init_command_vec(&announce, INFO_HASH.len(), INFO_HASH) {
+            Some(result) => result,
+            None => return Err(AnnounceError::InfoHash),
+        };
+        let peer_id = match init_command_vec(&announce, PEER_ID.len(), PEER_ID) {
+            Some(result) => result,
+            None => return Err(AnnounceError::PeerId),
+        };
+        let port = match init_command_u64(&announce, PORT.len(), PORT) {
+            result if (6881..=6889).contains(&result) => result,
+            _ => return Err(AnnounceError::Port),
+        };
         let downloaded = init_command_u64(&announce, DOWNLOADED.len(), DOWNLOADED);
         let uploaded = init_command_u64(&announce, UPLOADED.len(), UPLOADED);
         let left = init_command_u64(&announce, LEFT.len(), LEFT);
@@ -69,7 +84,7 @@ impl Announce {
         let compact = init_command_vec(&announce, COMPACT.len(), COMPACT);
         let event = init_command_vec(&announce, EVENT.len(), EVENT);
 
-        Announce {
+        Ok(Announce {
             info_hash,
             peer_id,
             port,
@@ -79,39 +94,51 @@ impl Announce {
             ip,
             compact,
             event,
-        }
+        })
     }
+}
 
-    pub fn get_announce_str(&self) {
-        let mut log_file = File::create("announce.html").unwrap();
+pub fn get_announce_str(announce: Announce) {
+    let mut log_file = File::create("announce.html").unwrap();
+    let none_response = b"None".to_vec();
 
-        let ip = match self.ip.clone() {
-            Some(vec) => vec,
-            None => b"None".to_vec(),
-        };
-        let compact = match self.compact.clone() {
-            Some(vec) => vec,
-            None => b"None".to_vec(),
-        };
-        let event = match self.event.clone() {
-            Some(vec) => vec,
-            None => b"None".to_vec(),
-        };
+    let ip = match announce.ip.clone() {
+        Some(vec) => vec,
+        None => none_response.clone(),
+    };
+    let compact = match announce.compact.clone() {
+        Some(vec) => vec,
+        None => none_response.clone(),
+    };
+    let event = match announce.event.clone() {
+        Some(vec) => vec,
+        None => none_response,
+    };
 
-        let a = format!(
-            "INFO_HASH: {}\nPEER_ID: {}\nPORT: {}\nDOWNLOADED: {}\nUPLOADED: {}\nLEFT: {}\nIP: {}\nCOMPACT: {}\nEVENT: {}\n",
-            String::from_utf8_lossy(&self.info_hash),
-            String::from_utf8_lossy(&self.peer_id),
-            self.port,
-            self.downloaded,
-            self.uploaded,
-            self.left,
-            String::from_utf8_lossy(&ip),
-            String::from_utf8_lossy(&compact),
-            String::from_utf8_lossy(&event),
-        );
+    let response = format!(
+        "INFO_HASH: {}\nPEER_ID: {}\nPORT: {}\nDOWNLOADED: {}\nUPLOADED: {}\nLEFT: {}\nIP: {}\nCOMPACT: {}\nEVENT: {}\n",
+        String::from_utf8_lossy(&announce.info_hash),
+        String::from_utf8_lossy(&announce.peer_id),
+        announce.port,
+        announce.downloaded,
+        announce.uploaded,
+        announce.left,
+        String::from_utf8_lossy(&ip),
+        String::from_utf8_lossy(&compact),
+        String::from_utf8_lossy(&event),
+    );
 
-        let _ = log_file.write_all(a.as_bytes());
-        let _ = log_file.flush();
-    }
+    let _ = log_file.write_all(response.as_bytes());
+    let _ = log_file.flush();
+}
+
+pub fn get_announce_error(error: AnnounceError) {
+    let mut log_file = File::create("announce.html").unwrap();
+    let response = match error {
+        AnnounceError::InfoHash => "Info Hash not found",
+        AnnounceError::PeerId => "Peer id not found",
+        AnnounceError::Port => "Port not found",
+    };
+    let _ = log_file.write_all(response.as_bytes());
+    let _ = log_file.flush();
 }

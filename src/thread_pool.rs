@@ -19,20 +19,25 @@ struct Worker {
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<Receiver<Message>>>) -> Worker {
         let thread = Some(thread::spawn(move || loop {
-            let message = receiver.lock().unwrap().recv().unwrap();
-
-            match message {
-                Message::NewJob(job) => {
-                    println!("Worker {} got a job; executing.", id);
-                    job();
+            let lock = receiver.lock();
+            match lock {
+                Ok(receiver) => {
+                    let message = receiver.recv();
+                    match message {
+                        Ok(Message::NewJob(job)) => {
+                            println!("Worker {} got a job; executing.", id);
+                            job();
+                        }
+                        Ok(Message::Terminate) => {
+                            println!("Worker {} was told to terminate.", id);
+                            break;
+                        }
+                        Err(_) => break, //Ver como informar este error
+                    }
                 }
-                Message::Terminate => {
-                    println!("Worker {} was told to terminate.", id);
-                    break;
-                }
+                Err(_) => break, //Ver como informar este error
             }
         }));
-
         Worker { id, thread }
     }
 }
@@ -62,14 +67,14 @@ impl ThreadPool {
         F: FnOnce() + Send + 'static,
     {
         let job = Box::new(f);
-        self.sender.send(Message::NewJob(job)).unwrap();
+        let _ = self.sender.send(Message::NewJob(job));
     }
 }
 
 impl Drop for ThreadPool {
     fn drop(&mut self) {
         for _ in &self.workers {
-            self.sender.send(Message::Terminate).unwrap();
+            let _ = self.sender.send(Message::Terminate);
         }
 
         println!("Shutting down all workers");
@@ -77,7 +82,7 @@ impl Drop for ThreadPool {
         for worker in &mut self.workers {
             println!("Shutting down worker {}", worker.id);
             if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
+                let _ = thread.join();
             }
         }
     }
