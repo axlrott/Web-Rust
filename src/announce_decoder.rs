@@ -1,5 +1,3 @@
-use std::{fs::File, io::Write};
-
 pub const INFO_HASH: &str = "info_hash=";
 pub const PEER_ID: &str = "peer_id=";
 pub const DOWNLOADED: &str = "downloaded=";
@@ -98,8 +96,7 @@ impl Announce {
     }
 }
 
-pub fn get_announce_str(announce: Announce) {
-    let mut log_file = File::create("announce.html").unwrap();
+pub fn get_announce_str(announce: Announce) -> String {
     let none_response = b"None".to_vec();
 
     let ip = match announce.ip.clone() {
@@ -115,7 +112,7 @@ pub fn get_announce_str(announce: Announce) {
         None => none_response,
     };
 
-    let response = format!(
+    format!(
         "INFO_HASH: {}\nPEER_ID: {}\nPORT: {}\nDOWNLOADED: {}\nUPLOADED: {}\nLEFT: {}\nIP: {}\nCOMPACT: {}\nEVENT: {}\n",
         String::from_utf8_lossy(&announce.info_hash),
         String::from_utf8_lossy(&announce.peer_id),
@@ -126,19 +123,13 @@ pub fn get_announce_str(announce: Announce) {
         String::from_utf8_lossy(&ip),
         String::from_utf8_lossy(&compact),
         String::from_utf8_lossy(&event),
-    );
-
-    let _ = log_file.write_all(response.as_bytes());
-    let _ = log_file.flush();
+    )
 }
 
-pub fn get_announce_error(error: AnnounceError) {
-    let mut log_file = File::create("announce.html").unwrap();
-    let response = match error {
-        AnnounceError::InfoHash => "Info Hash not found",
-        AnnounceError::PeerId => "Peer id not found",
-        AnnounceError::Port => "Port not found",
-    };
-    let _ = log_file.write_all(response.as_bytes());
-    let _ = log_file.flush();
+pub fn get_announce_error(error: AnnounceError) -> String {
+    match error {
+        AnnounceError::InfoHash => "Info Hash not found".to_string(),
+        AnnounceError::PeerId => "Peer id not found".to_string(),
+        AnnounceError::Port => "Port not found".to_string(),
+    }
 }

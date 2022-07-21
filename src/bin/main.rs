@@ -65,27 +65,30 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let mut buffer = [0; 1024];
+    let contents;
     let _ = stream.read(&mut buffer);
 
     let get = b"GET / HTTP/1.1\r\n";
     let get_announce = b"GET /announce";
 
-    let (status_line, filename) = if buffer.starts_with(get) {
-        ("HTTP/1.1 200 OK", "index.html")
+    let status_line = if buffer.starts_with(get) {
+        contents = fs::read_to_string("index.html")?;
+        "HTTP/1.1 200 OK"
     } else if buffer.starts_with(get_announce) {
         //Desencodear el announce de querystring, verificar que el info_hash sea de un .torrent valido
         //Y que los datos obligatorios esten en el announce.
         //Almacenar datos importantes [en .json?] y devolver los peers junto con la info de seeders y leechers
         let announce = Announce::new(buffer.clone().to_vec());
-        match announce {
+        let details = match announce {
             Ok(announce) => get_announce_str(announce),
             Err(error) => get_announce_error(error),
         };
-        ("HTTP/1.1 200 OK", "announce.html")
+        contents = details;
+        "HTTP/1.1 200 OK"
     } else {
-        ("HTTP/1.1 404 NOT FOUND", "404.html")
+        contents = fs::read_to_string("404.html")?;
+        "HTTP/1.1 404 NOT FOUND"
     };
-    let contents = fs::read_to_string(filename)?;
 
     let response = format!(
         "{}\r\nContent-Length: {}\r\n\r\n{}",
