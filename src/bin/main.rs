@@ -15,9 +15,12 @@ use web_rust::{
 
 fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
+    //Esto es lo que hace que el accept devuelva error si nadie si conecto y no se quede esperando por una conexion
     let _ = listener.set_nonblocking(true);
     let pool = ThreadPool::new(4);
+    //Variable que va a servirme para saber cuando si se hizo un shutdown
     let shutdown = Arc::new(Mutex::new(false));
+    //El string que va a servir como shutdown del tracker
     let exit_command = String::from("q\n");
 
     let shutdown_copy = Arc::clone(&shutdown);
@@ -36,6 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         println!("Listening...");
         match listener.accept() {
+            //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
             Ok((stream, sock_addr)) => {
                 println!("Conected to {}", sock_addr);
                 pool.execute(|| {
