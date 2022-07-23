@@ -4,8 +4,6 @@ use crate::bencoding::{encoder::from_dic, values::ValuesBencoding};
 
 use std::collections::hash_map::Entry;
 
-#[allow(dead_code)]
-
 pub struct TorrentInfo {
     info_hash: Vec<u8>,
     peers: HashMap<Vec<u8>, SocketAddr>,
@@ -51,25 +49,24 @@ impl TorrentInfo {
         dic_to_bencode.insert(key_incomplete, ValuesBencoding::Integer(self.incomplete));
 
         for key in self.peers.keys() {
-            let sock_addr = self.peers.get(key).unwrap();
-            let key_peer_id = b"peer_id".to_vec();
-            let key_ip = b"ip".to_vec();
-            let key_port = b"port".to_vec();
+            if let Some(sock_addr) = self.peers.get(key) {
+                let key_peer_id = b"peer_id".to_vec();
+                let key_ip = b"ip".to_vec();
+                let key_port = b"port".to_vec();
 
-            let peer_id = key.clone();
-            let ip = sock_addr.ip().to_string().as_bytes().to_vec();
-            let port = sock_addr.port() as i64;
+                let peer_id = key.clone();
+                let ip = sock_addr.ip().to_string().as_bytes().to_vec();
+                let port = sock_addr.port() as i64;
 
-            let mut dic_peer = HashMap::new();
-            dic_peer.insert(key_peer_id, ValuesBencoding::String(peer_id));
-            dic_peer.insert(key_ip, ValuesBencoding::String(ip));
-            dic_peer.insert(key_port, ValuesBencoding::Integer(port));
+                let mut dic_peer = HashMap::new();
+                dic_peer.insert(key_peer_id, ValuesBencoding::String(peer_id));
+                dic_peer.insert(key_ip, ValuesBencoding::String(ip));
+                dic_peer.insert(key_port, ValuesBencoding::Integer(port));
 
-            list_peers.push(ValuesBencoding::Dic(dic_peer))
+                list_peers.push(ValuesBencoding::Dic(dic_peer))
+            }
         }
-
         dic_to_bencode.insert(key_peers, ValuesBencoding::List(list_peers));
-
         from_dic(dic_to_bencode)
     }
 }

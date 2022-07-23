@@ -96,36 +96,6 @@ impl Announce {
     }
 }
 
-pub fn get_announce_str(announce: Announce) -> String {
-    let none_response = b"None".to_vec();
-
-    let ip = match announce.ip.clone() {
-        Some(vec) => vec,
-        None => none_response.clone(),
-    };
-    let compact = match announce.compact.clone() {
-        Some(vec) => vec,
-        None => none_response.clone(),
-    };
-    let event = match announce.event.clone() {
-        Some(vec) => vec,
-        None => none_response,
-    };
-
-    format!(
-        "INFO_HASH: {}\nPEER_ID: {}\nPORT: {}\nDOWNLOADED: {}\nUPLOADED: {}\nLEFT: {}\nIP: {}\nCOMPACT: {}\nEVENT: {}\n",
-        String::from_utf8_lossy(&announce.info_hash),
-        String::from_utf8_lossy(&announce.peer_id),
-        announce.port,
-        announce.downloaded,
-        announce.uploaded,
-        announce.left,
-        String::from_utf8_lossy(&ip),
-        String::from_utf8_lossy(&compact),
-        String::from_utf8_lossy(&event),
-    )
-}
-
 pub fn get_announce_error(error: AnnounceError) -> String {
     match error {
         AnnounceError::InfoHash => "Info Hash not found".to_string(),
