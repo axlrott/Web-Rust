@@ -2,7 +2,7 @@ use std::{
     error::Error,
     fs,
     io::{ErrorKind, Read, Write},
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream},
+    net::{SocketAddr, TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -43,8 +43,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
             Ok((stream, sock_addr)) => {
                 println!("Conected to {}", sock_addr);
-                pool.execute(|| {
-                    match handle_connection(stream) {
+                pool.execute(move || {
+                    match handle_connection(stream, sock_addr) {
                         Ok(_) => (),
                         Err(error) => println!("{}", error), //Ver que hacer es casos de error
                     }
@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
+fn handle_connection(mut stream: TcpStream, ip_port: SocketAddr) -> Result<(), Box<dyn Error>> {
     let mut buffer = [0; 1024];
     let contents;
     let _ = stream.read(&mut buffer);
@@ -78,9 +78,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
 
     //Me creo un torrent generico con un peer generico
     let mut torrent_new = TorrentInfo::new(b"1234567".to_vec());
-    let sock_addr_new = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 12, 33, 1), 8080));
-    torrent_new.add_peer(b"ZAZ-0012324".to_vec(), sock_addr_new);
-
+    
     let status_line = if buffer.starts_with(get) {
         contents = fs::read_to_string("index.html")?;
         "HTTP/1.1 200 OK"
@@ -90,7 +88,12 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         //Almacenar datos importantes [en .json?] y devolver los peers junto con la info de seeders y leechers
         let announce = Announce::new(buffer.clone().to_vec());
         let details = match announce {
-            Ok(_announce) => String::from_utf8_lossy(&torrent_new.to_bencoding()).to_string(),
+            Ok(announce) => {
+                let response = String::from_utf8_lossy(&torrent_new.to_bencoding()).to_string();
+                torrent_new.add_peer(announce.get_peer_id(), ip_port);
+                response
+
+            },
             Err(error) => get_announce_error(error),
         };
         contents = details;

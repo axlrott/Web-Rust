@@ -94,6 +94,31 @@ impl Announce {
             event,
         })
     }
+
+    pub fn get_info_hash(&self) -> Vec<u8> {
+        self.info_hash.clone()
+    }
+
+    pub fn get_peer_id(&self) -> Vec<u8> {
+        self.peer_id.clone()
+    }
+
+    pub fn get_port(&self) -> u64 {
+        self.port
+    }
+
+    pub fn is_compact(&self) -> bool {
+        match self.compact.clone() {
+            Some(mut value) => {
+                match value.pop() {
+                    Some(num) => num == b'1',
+                    None => true
+                }
+            },
+            None => true
+        }
+    }
+
 }
 
 pub fn get_announce_error(error: AnnounceError) -> String {

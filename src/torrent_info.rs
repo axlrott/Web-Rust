@@ -26,10 +26,15 @@ impl TorrentInfo {
     }
 
     pub fn add_peer(&mut self, peer_id: Vec<u8>, peer: SocketAddr) {
+        println!("Added: {:?} {:?}", peer_id, peer);
         if let Entry::Vacant(vacant) = self.peers.entry(peer_id) {
             vacant.insert(peer);
             self.incomplete += 1;
         }
+    }
+
+    pub fn remove_peer(&mut self, peer_id: Vec<u8>) -> Option<SocketAddr> {
+        self.peers.remove(&peer_id)
     }
 
     pub fn peer_complete(&mut self) {
