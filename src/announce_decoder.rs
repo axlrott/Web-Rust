@@ -109,16 +109,13 @@ impl Announce {
 
     pub fn is_compact(&self) -> bool {
         match self.compact.clone() {
-            Some(mut value) => {
-                match value.pop() {
-                    Some(num) => num == b'1',
-                    None => true
-                }
+            Some(mut value) => match value.pop() {
+                Some(num) => num == b'1',
+                None => true,
             },
-            None => true
+            None => true,
         }
     }
-
 }
 
 pub fn get_announce_error(error: AnnounceError) -> String {

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     error::Error,
     fs,
     io::{ErrorKind, Read, Write},
@@ -14,6 +15,8 @@ use web_rust::{
     torrent_info::TorrentInfo,
 };
 
+type MutexTorrents = Arc<Mutex<HashMap<Vec<u8>, TorrentInfo>>>;
+
 fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
     //Esto es lo que hace que el accept devuelva error si nadie si conecto y no se quede esperando por una conexion
@@ -23,6 +26,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let shutdown = Arc::new(Mutex::new(false));
     //El string que va a servir como shutdown del tracker
     let exit_command = String::from("q\n");
+    let mut dic_torrents = HashMap::new();
+    dic_torrents.insert(
+        "ABCD".as_bytes().to_vec(),
+        TorrentInfo::new("ABCD".as_bytes().to_vec()),
+    );
+    //Mutex de un diccionario que contiene los TorrentInfo
+    let mutex_torrents: MutexTorrents = Arc::new(Mutex::new(dic_torrents));
 
     let shutdown_copy = Arc::clone(&shutdown);
     thread::spawn(move || loop {
@@ -42,9 +52,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         match listener.accept() {
             //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
             Ok((stream, sock_addr)) => {
+                let dic_copy = Arc::clone(&mutex_torrents);
                 println!("Conected to {}", sock_addr);
                 pool.execute(move || {
-                    match handle_connection(stream, sock_addr) {
+                    match handle_connection(stream, dic_copy, sock_addr) {
                         Ok(_) => (),
                         Err(error) => println!("{}", error), //Ver que hacer es casos de error
                     }
@@ -53,8 +64,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             Err(error) => {
                 if error.kind() == ErrorKind::WouldBlock {
                     match shutdown.lock() {
-                        Ok(mutex) => {
-                            if *mutex {
+                        Ok(mutex_sutdown) => {
+                            if *mutex_sutdown {
                                 break;
                             }
                         }
@@ -68,7 +79,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream, ip_port: SocketAddr) -> Result<(), Box<dyn Error>> {
+fn handle_connection(
+    mut stream: TcpStream,
+    dic_torrents: MutexTorrents,
+    ip_port: SocketAddr,
+) -> Result<(), Box<dyn Error>> {
     let mut buffer = [0; 1024];
     let contents;
     let _ = stream.read(&mut buffer);
@@ -77,8 +92,6 @@ fn handle_connection(mut stream: TcpStream, ip_port: SocketAddr) -> Result<(), B
     let get_announce = b"GET /announce";
 
     //Me creo un torrent generico con un peer generico
-    let mut torrent_new = TorrentInfo::new(b"1234567".to_vec());
-    
     let status_line = if buffer.starts_with(get) {
         contents = fs::read_to_string("index.html")?;
         "HTTP/1.1 200 OK"
@@ -89,11 +102,20 @@ fn handle_connection(mut stream: TcpStream, ip_port: SocketAddr) -> Result<(), B
         let announce = Announce::new(buffer.clone().to_vec());
         let details = match announce {
             Ok(announce) => {
-                let response = String::from_utf8_lossy(&torrent_new.to_bencoding()).to_string();
-                torrent_new.add_peer(announce.get_peer_id(), ip_port);
-                response
-
-            },
+                let response = dic_torrents
+                    .lock()
+                    .unwrap()
+                    .get("ABCD".as_bytes())
+                    .unwrap()
+                    .to_bencoding();
+                dic_torrents
+                    .lock()
+                    .unwrap()
+                    .get_mut("ABCD".as_bytes())
+                    .unwrap()
+                    .add_peer(announce.get_peer_id(), ip_port);
+                String::from_utf8_lossy(&response).to_string()
+            }
             Err(error) => get_announce_error(error),
         };
         contents = details;

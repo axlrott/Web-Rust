@@ -25,6 +25,10 @@ impl TorrentInfo {
         }
     }
 
+    pub fn get_info_hash(&self) -> Vec<u8> {
+        self.info_hash.clone()
+    }
+
     pub fn add_peer(&mut self, peer_id: Vec<u8>, peer: SocketAddr) {
         println!("Added: {:?} {:?}", peer_id, peer);
         if let Entry::Vacant(vacant) = self.peers.entry(peer_id) {
