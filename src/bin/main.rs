@@ -95,11 +95,11 @@ fn handle_connection(
         contents = fs::read_to_string("index.html")?;
         "HTTP/1.1 200 OK"
     } else if buffer.starts_with(get_announce) {
-        //[TODO] Desencodear el announce de querystring, verificar que el info_hash sea de un .torrent valido
         //[TODO] Almacenar datos importantes [en .json?]
         let announce = PeerInfo::new(buffer.clone().to_vec(), ip_port);
         let details = match announce {
             Ok(announce) => {
+                println!("INFO_HASH: {:?}", announce.get_peer_id());
                 let response = dic_torrents
                     .lock()
                     .unwrap()

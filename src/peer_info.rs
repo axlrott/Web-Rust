@@ -46,6 +46,30 @@ pub struct PeerInfo {
     event: Option<Event>,
 }
 
+fn url_decoder(url: Vec<u8>) -> Vec<u8> {
+    let mut counter = 0;
+    let mut hex = String::new();
+    let mut vec_res = vec![];
+    for byte in url {
+        if byte == b'%' {
+            counter = 2;
+            continue;
+        } else if counter > 0 {
+            hex.push(byte as char);
+            counter -= 1;
+            if counter == 0 {
+                if let Ok(num) = u8::from_str_radix(&hex, 16) {
+                    vec_res.push(num)
+                };
+                hex = String::new();
+            };
+        } else {
+            vec_res.push(byte);
+        }
+    }
+    vec_res
+}
+
 fn find_index_msg(response: &[u8], size: usize, end_line: &[u8]) -> Option<usize> {
     let first_pos = response.windows(size).position(|arr| arr == end_line);
     first_pos.map(|pos| pos + size)
@@ -108,7 +132,7 @@ impl PeerInfo {
     pub fn new(announce: Vec<u8>, sock_addr: SocketAddr) -> Result<Self, PeerInfoError> {
         //Si uno de los campos obligatorios del Announce no existe devuelvo error
         let info_hash = match init_command(&announce, INFO_HASH.len(), INFO_HASH) {
-            Some(result) => result,
+            Some(result) => url_decoder(result),
             None => return Err(PeerInfoError::InfoHash),
         };
         let peer_id = match init_command(&announce, PEER_ID.len(), PEER_ID) {
@@ -176,7 +200,7 @@ impl PeerInfo {
         if let Some(Event::Completed) = self.event {
             return true;
         };
-        self.left == 0
+        self.left == ZERO
     }
 
     pub fn is_compact(&self) -> bool {
