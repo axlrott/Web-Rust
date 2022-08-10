@@ -149,6 +149,7 @@ fn init_event(announce: &[u8]) -> Option<Event> {
 
 impl PeerInfo {
     pub fn new(announce: Vec<u8>, sock_addr: SocketAddr) -> Result<Self, PeerInfoError> {
+        let mut sock_addr = sock_addr;
         //Si uno de los campos obligatorios del Announce no existe devuelvo error
         let info_hash = match init_info_hash(&announce) {
             Ok(result) => result,
@@ -176,6 +177,9 @@ impl PeerInfo {
         };
         let compact = init_command(&announce, COMPACT.len(), COMPACT);
         let event = init_event(&announce);
+
+        //Cambio el puerto dado por el que me dieron en el announce
+        sock_addr.set_port(port as u16);
 
         Ok(PeerInfo {
             sock_addr,
