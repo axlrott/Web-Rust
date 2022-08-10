@@ -10,7 +10,8 @@ use std::{
 };
 
 use web_rust::{
-    peer_info::{get_announce_error, PeerInfo},
+    constants::*,
+    peer_info::{get_announce_error, PeerInfo, PeerInfoError},
     thread_pool::ThreadPool,
     torrent_info::TorrentInfo,
 };
@@ -27,9 +28,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     //El string que va a servir como shutdown del tracker
     let exit_command = String::from("q\n");
     let mut dic_torrents = HashMap::new();
+    //Creo un torrent generico para hacer pruebas
     dic_torrents.insert(
-        "ABCD".as_bytes().to_vec(),
-        TorrentInfo::new("ABCD".as_bytes().to_vec()),
+        "abcdefghijklmn123456".as_bytes().to_vec(),
+        TorrentInfo::new("abcdefghijklmn123456".as_bytes().to_vec()),
     );
     //Mutex de un diccionario que contiene los TorrentInfo
     let mutex_torrents: MutexTorrents = Arc::new(Mutex::new(dic_torrents));
@@ -87,52 +89,49 @@ fn handle_connection(
     ip_port: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
     let mut buffer = [0; 1024];
-    let contents;
     let _ = stream.read(&mut buffer);
+    let mut status_line = OK_URL;
 
-    let get = b"GET / HTTP/1.1\r\n";
-    let get_announce = b"GET /announce";
-
-    let status_line = if buffer.starts_with(get) {
-        contents = fs::read_to_string("index.html")?;
-        "HTTP/1.1 200 OK"
-    } else if buffer.starts_with(get_announce) {
+    let mut contents = if buffer.starts_with(GET_URL) {
+        fs::read(INDEX_HTML)?
+    } else if buffer.starts_with(STATS_URL) {
+        fs::read(STATS_HTML)?
+    } else if buffer.starts_with(ANNOUNCE_URL) {
         //[TODO] Almacenar datos importantes [en .json?]
         let announce = PeerInfo::new(buffer.clone().to_vec(), ip_port);
         let details = match announce {
             Ok(announce) => {
-                println!("INFO_HASH: {:?}", announce.get_peer_id());
-                let response = dic_torrents
-                    .lock()
-                    .unwrap()
-                    .get("ABCD".as_bytes())
-                    .unwrap()
-                    .get_response_bencoded(announce.get_peer_id());
-                dic_torrents
-                    .lock()
-                    .unwrap()
-                    .get_mut("ABCD".as_bytes())
-                    .unwrap()
-                    .add_peer(announce.get_peer_id(), announce);
-                String::from_utf8_lossy(&response).to_string()
+                let info_hash = announce.get_info_hash();
+                match dic_torrents.lock().unwrap().get_mut(&info_hash) {
+                    Some(torrent) => {
+                        let response = torrent.get_response_bencoded(announce.get_peer_id());
+                        torrent.add_peer(announce.get_peer_id(), announce);
+                        response
+                    }
+                    None => get_announce_error(PeerInfoError::InfoHashInvalid)
+                        .as_bytes()
+                        .to_vec(),
+                }
             }
-            Err(error) => get_announce_error(error),
+            Err(error) => get_announce_error(error).as_bytes().to_vec(),
         };
-        contents = details;
-        "HTTP/1.1 200 OK"
+        details
     } else {
-        contents = fs::read_to_string("404.html")?;
-        "HTTP/1.1 404 NOT FOUND"
+        status_line = ERR_URL;
+        fs::read(ERROR_HTML)?
     };
 
-    let response = format!(
-        "{}\r\nContent-Length: {}\r\n\r\n{}",
+    let mut response = format!(
+        "{}\r\nContent-Length: {}\r\n\r\n",
         status_line,
         contents.len(),
-        contents
-    );
+    )
+    .as_bytes()
+    .to_vec();
 
-    stream.write_all(response.as_bytes())?;
+    response.append(&mut contents);
+
+    stream.write_all(&response)?;
     stream.flush()?;
     Ok(())
 }

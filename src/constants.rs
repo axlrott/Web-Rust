@@ -1,5 +1,15 @@
 use std::ops::RangeInclusive;
 
+pub const GET_URL: &[u8; 16] = b"GET / HTTP/1.1\r\n";
+pub const ANNOUNCE_URL: &[u8; 13] = b"GET /announce";
+pub const STATS_URL: &[u8; 10] = b"GET /stats";
+pub const OK_URL: &str = "HTTP/1.1 200 OK";
+pub const ERR_URL: &str = "HTTP/1.1 404 NOT FOUND";
+
+pub const INDEX_HTML: &str = "index.html";
+pub const STATS_HTML: &str = "stats.html";
+pub const ERROR_HTML: &str = "404.html";
+
 pub const INFO_HASH: &str = "info_hash=";
 pub const PEER_ID: &str = "peer_id=";
 pub const DOWNLOADED: &str = "downloaded=";
