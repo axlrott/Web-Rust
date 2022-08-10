@@ -1,27 +1,24 @@
-use std::{collections::HashMap, net::SocketAddr};
-
-use crate::bencoding::{encoder::from_dic, values::ValuesBencoding};
-
-use std::collections::hash_map::Entry;
+use crate::{
+    bencoding::{encoder::from_dic, values::ValuesBencoding},
+    peer_info::PeerInfo,
+};
+use std::collections::HashMap;
 
 pub struct TorrentInfo {
     info_hash: Vec<u8>,
-    peers: HashMap<Vec<u8>, SocketAddr>,
-    complete: i64,
-    incomplete: i64,
+    interval: i64,
+    peers: HashMap<Vec<u8>, PeerInfo>,
 }
 
 impl TorrentInfo {
     pub fn new(info_hash: Vec<u8>) -> Self {
         let peers = HashMap::new();
-        let complete = 0;
-        let incomplete = 0;
+        let interval = 0;
 
         TorrentInfo {
             info_hash,
+            interval,
             peers,
-            complete,
-            incomplete,
         }
     }
 
@@ -29,40 +26,51 @@ impl TorrentInfo {
         self.info_hash.clone()
     }
 
-    pub fn add_peer(&mut self, peer_id: Vec<u8>, peer: SocketAddr) {
-        println!("Added: {:?} {:?}", peer_id, peer);
-        if let Entry::Vacant(vacant) = self.peers.entry(peer_id) {
-            vacant.insert(peer);
-            self.incomplete += 1;
+    pub fn add_peer(&mut self, peer_id: Vec<u8>, peer_info: PeerInfo) {
+        println!("Added: {:?}", peer_id);
+        self.peers.insert(peer_id, peer_info);
+    }
+
+    fn get_complete_incomplete(&self) -> (i64, i64) {
+        let mut complete = 0;
+        let mut incomplete = 0;
+        for peer in self.peers.values() {
+            if peer.is_complete() {
+                complete += 1;
+            } else {
+                incomplete += 1;
+            }
         }
+        (complete, incomplete)
     }
 
-    pub fn remove_peer(&mut self, peer_id: Vec<u8>) -> Option<SocketAddr> {
-        self.peers.remove(&peer_id)
-    }
-
-    pub fn peer_complete(&mut self) {
-        self.complete += 1;
-        self.incomplete -= 1;
-    }
-
-    pub fn to_bencoding(&self) -> Vec<u8> {
+    //Devuelvo la respuesta en formato bencoding, pido la peer_id solicitante para no devolver la misma al
+    //dar la respuesta ya que puede que no sea la primera vez que se comunique y este incluido entre los peers.
+    pub fn get_response_bencoded(&self, peer_id: Vec<u8>) -> Vec<u8> {
         let key_complete = b"complete".to_vec();
         let key_incomplete = b"incomplete".to_vec();
+        let key_interval = b"interval".to_vec();
         let key_peers = b"peers".to_vec();
+
+        let (complete, incomplete) = self.get_complete_incomplete();
 
         let mut dic_to_bencode: HashMap<Vec<u8>, ValuesBencoding> = HashMap::new();
         let mut list_peers: Vec<ValuesBencoding> = vec![];
 
-        dic_to_bencode.insert(key_complete, ValuesBencoding::Integer(self.complete));
-        dic_to_bencode.insert(key_incomplete, ValuesBencoding::Integer(self.incomplete));
+        dic_to_bencode.insert(key_complete, ValuesBencoding::Integer(complete));
+        dic_to_bencode.insert(key_incomplete, ValuesBencoding::Integer(incomplete));
+        dic_to_bencode.insert(key_interval, ValuesBencoding::Integer(self.interval));
 
         for key in self.peers.keys() {
-            if let Some(sock_addr) = self.peers.get(key) {
+            if key.clone() == peer_id {
+                continue;
+            }
+            if let Some(peer_info) = self.peers.get(key) {
                 let key_peer_id = b"peer_id".to_vec();
                 let key_ip = b"ip".to_vec();
                 let key_port = b"port".to_vec();
 
+                let sock_addr = peer_info.get_sock_addr();
                 let peer_id = key.clone();
                 let ip = sock_addr.ip().to_string().as_bytes().to_vec();
                 let port = sock_addr.port() as i64;

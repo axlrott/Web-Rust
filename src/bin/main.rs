@@ -10,7 +10,7 @@ use std::{
 };
 
 use web_rust::{
-    announce_decoder::{get_announce_error, Announce},
+    peer_info::{get_announce_error, PeerInfo},
     thread_pool::ThreadPool,
     torrent_info::TorrentInfo,
 };
@@ -91,15 +91,13 @@ fn handle_connection(
     let get = b"GET / HTTP/1.1\r\n";
     let get_announce = b"GET /announce";
 
-    //Me creo un torrent generico con un peer generico
     let status_line = if buffer.starts_with(get) {
         contents = fs::read_to_string("index.html")?;
         "HTTP/1.1 200 OK"
     } else if buffer.starts_with(get_announce) {
-        //Desencodear el announce de querystring, verificar que el info_hash sea de un .torrent valido
-        //Y que los datos obligatorios esten en el announce.
-        //Almacenar datos importantes [en .json?] y devolver los peers junto con la info de seeders y leechers
-        let announce = Announce::new(buffer.clone().to_vec());
+        //[TODO] Desencodear el announce de querystring, verificar que el info_hash sea de un .torrent valido
+        //[TODO] Almacenar datos importantes [en .json?]
+        let announce = PeerInfo::new(buffer.clone().to_vec(), ip_port);
         let details = match announce {
             Ok(announce) => {
                 let response = dic_torrents
@@ -107,13 +105,13 @@ fn handle_connection(
                     .unwrap()
                     .get("ABCD".as_bytes())
                     .unwrap()
-                    .to_bencoding();
+                    .get_response_bencoded(announce.get_peer_id());
                 dic_torrents
                     .lock()
                     .unwrap()
                     .get_mut("ABCD".as_bytes())
                     .unwrap()
-                    .add_peer(announce.get_peer_id(), ip_port);
+                    .add_peer(announce.get_peer_id(), announce);
                 String::from_utf8_lossy(&response).to_string()
             }
             Err(error) => get_announce_error(error),
