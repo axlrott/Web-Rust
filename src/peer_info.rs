@@ -1,22 +1,5 @@
-use std::{net::SocketAddr, ops::RangeInclusive};
-
-pub const INFO_HASH: &str = "info_hash=";
-pub const PEER_ID: &str = "peer_id=";
-pub const DOWNLOADED: &str = "downloaded=";
-pub const UPLOADED: &str = "uploaded=";
-pub const LEFT: &str = "left=";
-pub const PORT: &str = "port=";
-pub const EVENT: &str = "event=";
-pub const COMPACT: &str = "compact=";
-
-pub const STARTED: &str = "started";
-pub const COMPLETED: &str = "completed";
-pub const STOPPED: &str = "stopped";
-
-pub const ZERO: u64 = 0;
-pub const FIRST_PORT: u64 = 6881;
-pub const LAST_PORT: u64 = 6889;
-pub const RANGE_PORT: RangeInclusive<u64> = FIRST_PORT..=LAST_PORT;
+use crate::constants::*;
+use std::net::SocketAddr;
 
 pub enum Event {
     Started,
@@ -25,10 +8,13 @@ pub enum Event {
 }
 
 pub enum PeerInfoError {
-    InfoHash,
+    InfoHashNotFound,
+    InfoHashInvalid,
     PeerId,
     PortNotFound,
     PortInvalid,
+    StatNotFound,
+    StatInvalid,
 }
 
 pub struct PeerInfo {
@@ -91,16 +77,6 @@ fn init_command(announce: &[u8], size_command: usize, command: &str) -> Option<V
     pos_result.map(|pos| take_result(&announce[pos..]))
 }
 
-fn from_vec_to_u64_or_zero(result: Option<Vec<u8>>) -> u64 {
-    match result {
-        Some(vec) => {
-            let str_num = String::from_utf8_lossy(&vec).to_string();
-            str_num.parse::<u64>().unwrap_or(ZERO)
-        }
-        None => ZERO,
-    }
-}
-
 fn from_vec_to_port(result: Option<Vec<u8>>) -> Result<u64, PeerInfoError> {
     match result {
         Some(vec) => {
@@ -128,40 +104,78 @@ fn get_event(name_event: String) -> Option<Event> {
     }
 }
 
+fn init_info_hash(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
+    match init_command(announce, INFO_HASH.len(), INFO_HASH) {
+        Some(result) => {
+            let url_decoded = url_decoder(result);
+            if url_decoded.len() != 20 {
+                Err(PeerInfoError::InfoHashInvalid)
+            } else {
+                Ok(url_decoded)
+            }
+        }
+        None => Err(PeerInfoError::InfoHashNotFound),
+    }
+}
+
+fn init_port(announce: &[u8]) -> Result<u64, PeerInfoError> {
+    let port = init_command(announce, PORT.len(), PORT);
+    from_vec_to_port(port)
+}
+
+fn init_stat(announce: &[u8], stat_type: &str) -> Result<u64, PeerInfoError> {
+    let stat = init_command(announce, stat_type.len(), stat_type);
+    match stat {
+        Some(vec) => {
+            let str_num = String::from_utf8_lossy(&vec).to_string();
+            match str_num.parse::<u64>() {
+                Ok(number_res) => Ok(number_res),
+                Err(_) => Err(PeerInfoError::StatInvalid),
+            }
+        }
+        None => Err(PeerInfoError::StatNotFound),
+    }
+}
+
+fn init_event(announce: &[u8]) -> Option<Event> {
+    match init_command(announce, EVENT.len(), EVENT) {
+        Some(vector_event) => match String::from_utf8(vector_event) {
+            Ok(value) => get_event(value),
+            Err(_) => None,
+        },
+        None => None,
+    }
+}
+
 impl PeerInfo {
     pub fn new(announce: Vec<u8>, sock_addr: SocketAddr) -> Result<Self, PeerInfoError> {
         //Si uno de los campos obligatorios del Announce no existe devuelvo error
-        let info_hash = match init_command(&announce, INFO_HASH.len(), INFO_HASH) {
-            Some(result) => url_decoder(result),
-            None => return Err(PeerInfoError::InfoHash),
+        let info_hash = match init_info_hash(&announce) {
+            Ok(result) => result,
+            Err(error) => return Err(error),
         };
         let peer_id = match init_command(&announce, PEER_ID.len(), PEER_ID) {
             Some(result) => result,
             None => return Err(PeerInfoError::PeerId),
         };
-        let port = init_command(&announce, PORT.len(), PORT);
-        let port = match from_vec_to_port(port) {
-            Ok(port_num) => port_num,
-            Err(error_type) => return Err(error_type),
+        let port = match init_port(&announce) {
+            Ok(result) => result,
+            Err(error) => return Err(error),
         };
-        //Si downloaded, uploaded o left no existe o es invalido lo inicializo como cero
-        let downloaded = init_command(&announce, DOWNLOADED.len(), DOWNLOADED);
-        let downloaded = from_vec_to_u64_or_zero(downloaded);
-
-        let uploaded = init_command(&announce, UPLOADED.len(), UPLOADED);
-        let uploaded = from_vec_to_u64_or_zero(uploaded);
-
-        let left = init_command(&announce, LEFT.len(), LEFT);
-        let left = from_vec_to_u64_or_zero(left);
-
+        let downloaded = match init_stat(&announce, DOWNLOADED) {
+            Ok(result) => result,
+            Err(error) => return Err(error),
+        };
+        let uploaded = match init_stat(&announce, UPLOADED) {
+            Ok(result) => result,
+            Err(error) => return Err(error),
+        };
+        let left = match init_stat(&announce, LEFT) {
+            Ok(result) => result,
+            Err(error) => return Err(error),
+        };
         let compact = init_command(&announce, COMPACT.len(), COMPACT);
-        let event = match init_command(&announce, EVENT.len(), EVENT) {
-            Some(vector_event) => match String::from_utf8(vector_event) {
-                Ok(value) => get_event(value),
-                Err(_) => None,
-            },
-            None => None,
-        };
+        let event = init_event(&announce);
 
         Ok(PeerInfo {
             sock_addr,
@@ -216,9 +230,12 @@ impl PeerInfo {
 
 pub fn get_announce_error(error: PeerInfoError) -> String {
     match error {
-        PeerInfoError::InfoHash => "Info Hash not found".to_string(),
-        PeerInfoError::PeerId => "Peer id not found".to_string(),
-        PeerInfoError::PortNotFound => "Port not found".to_string(),
-        PeerInfoError::PortInvalid => "Port number invalid".to_string(),
+        PeerInfoError::InfoHashNotFound => ERROR_INFO_HASH_NOT_FOUND.to_owned(),
+        PeerInfoError::InfoHashInvalid => ERROR_INFO_HASH_INVALID.to_owned(),
+        PeerInfoError::PeerId => ERROR_PEER_ID_INVALID.to_owned(),
+        PeerInfoError::StatNotFound => ERROR_STAT_NOT_FOUND.to_owned(),
+        PeerInfoError::StatInvalid => ERROR_STAT_INVALID.to_owned(),
+        PeerInfoError::PortNotFound => ERROR_STAT_NOT_FOUND.to_owned(),
+        PeerInfoError::PortInvalid => ERROR_PORT_INVALID.to_owned(),
     }
 }

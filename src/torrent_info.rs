@@ -1,5 +1,6 @@
 use crate::{
     bencoding::{encoder::from_dic, values::ValuesBencoding},
+    constants::*,
     peer_info::PeerInfo,
 };
 use std::collections::HashMap;
@@ -27,7 +28,6 @@ impl TorrentInfo {
     }
 
     pub fn add_peer(&mut self, peer_id: Vec<u8>, peer_info: PeerInfo) {
-        println!("Added: {:?}", peer_id);
         self.peers.insert(peer_id, peer_info);
     }
 
@@ -47,43 +47,40 @@ impl TorrentInfo {
     //Devuelvo la respuesta en formato bencoding, pido la peer_id solicitante para no devolver la misma al
     //dar la respuesta ya que puede que no sea la primera vez que se comunique y este incluido entre los peers.
     pub fn get_response_bencoded(&self, peer_id: Vec<u8>) -> Vec<u8> {
-        let key_complete = b"complete".to_vec();
-        let key_incomplete = b"incomplete".to_vec();
-        let key_interval = b"interval".to_vec();
-        let key_peers = b"peers".to_vec();
-
         let (complete, incomplete) = self.get_complete_incomplete();
 
         let mut dic_to_bencode: HashMap<Vec<u8>, ValuesBencoding> = HashMap::new();
         let mut list_peers: Vec<ValuesBencoding> = vec![];
 
-        dic_to_bencode.insert(key_complete, ValuesBencoding::Integer(complete));
-        dic_to_bencode.insert(key_incomplete, ValuesBencoding::Integer(incomplete));
-        dic_to_bencode.insert(key_interval, ValuesBencoding::Integer(self.interval));
+        dic_to_bencode.insert(COMPLETE_BYTES.to_vec(), ValuesBencoding::Integer(complete));
+        dic_to_bencode.insert(
+            INCOMPLETE_BYTES.to_vec(),
+            ValuesBencoding::Integer(incomplete),
+        );
+        dic_to_bencode.insert(
+            INTERVAL_BYTES.to_vec(),
+            ValuesBencoding::Integer(self.interval),
+        );
 
         for key in self.peers.keys() {
             if key.clone() == peer_id {
                 continue;
             }
             if let Some(peer_info) = self.peers.get(key) {
-                let key_peer_id = b"peer_id".to_vec();
-                let key_ip = b"ip".to_vec();
-                let key_port = b"port".to_vec();
-
                 let sock_addr = peer_info.get_sock_addr();
                 let peer_id = key.clone();
                 let ip = sock_addr.ip().to_string().as_bytes().to_vec();
                 let port = sock_addr.port() as i64;
 
                 let mut dic_peer = HashMap::new();
-                dic_peer.insert(key_peer_id, ValuesBencoding::String(peer_id));
-                dic_peer.insert(key_ip, ValuesBencoding::String(ip));
-                dic_peer.insert(key_port, ValuesBencoding::Integer(port));
+                dic_peer.insert(PEER_ID_BYTES.to_vec(), ValuesBencoding::String(peer_id));
+                dic_peer.insert(IP_BYTES.to_vec(), ValuesBencoding::String(ip));
+                dic_peer.insert(PORT_BYTES.to_vec(), ValuesBencoding::Integer(port));
 
                 list_peers.push(ValuesBencoding::Dic(dic_peer))
             }
         }
-        dic_to_bencode.insert(key_peers, ValuesBencoding::List(list_peers));
+        dic_to_bencode.insert(PEERS_BYTES.to_vec(), ValuesBencoding::List(list_peers));
         from_dic(dic_to_bencode)
     }
 }

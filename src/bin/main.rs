@@ -71,6 +71,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         _ => (), //Ver que hacer en casos de error
                     }
+                    //Por cada vez que no conecto espero 1 seg a la siguiente request
+                    //Para no estar loopeando tan rapidamente y que explote la maquina.
                     thread::sleep(Duration::from_secs(1));
                 }
             }
