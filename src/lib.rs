@@ -3,7 +3,7 @@ pub mod tracker;
 use std::{
     collections::HashMap,
     error::Error,
-    fs,
+    fmt, fs,
     io::{ErrorKind, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{Arc, Mutex},
@@ -20,6 +20,19 @@ use tracker::{
 
 type MutexTorrents = Arc<Mutex<HashMap<Vec<u8>, TorrentInfo>>>;
 type ResultEmpty = Result<(), Box<dyn Error>>;
+
+#[derive(Debug)]
+pub enum ErrorMain {
+    UnlockDicTorrent,
+}
+
+impl fmt::Display for ErrorMain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\n    {:#?}\n", self)
+    }
+}
+
+impl Error for ErrorMain {}
 
 pub fn run() -> ResultEmpty {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
@@ -48,7 +61,7 @@ pub fn run() -> ResultEmpty {
             println!("Execute exit command");
             match shutdown_copy.lock() {
                 Ok(mut mutex) => *mutex = true,
-                _ => (), //Ver que hacer en casos de error
+                _ => println!("Error de unlock"), //Ver que hacer en casos de error
             }
         }
     });
@@ -57,7 +70,7 @@ pub fn run() -> ResultEmpty {
         match listener.accept() {
             //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
             Ok((stream, sock_addr)) => {
-                let dic_copy = Arc::clone(&mutex_torrents);
+                let dic_copy: MutexTorrents = Arc::clone(&mutex_torrents);
                 println!("Conected to {}", sock_addr);
                 pool.execute(move || {
                     match handle_connection(stream, dic_copy, sock_addr) {
@@ -74,7 +87,7 @@ pub fn run() -> ResultEmpty {
                                 break;
                             }
                         }
-                        _ => (), //Ver que hacer en casos de error
+                        _ => break,
                     }
                     //Por cada vez que no conecto espero 1 seg a la siguiente request
                     //Para no estar loopeando tan rapidamente y que explote la maquina.
@@ -86,7 +99,11 @@ pub fn run() -> ResultEmpty {
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream, dic_torrents: MutexTorrents, ip_port: SocketAddr) -> ResultEmpty {
+fn handle_connection(
+    mut stream: TcpStream,
+    dic_torrents: MutexTorrents,
+    ip_port: SocketAddr,
+) -> ResultEmpty {
     let mut buffer = [0; 1024];
     let _ = stream.read(&mut buffer);
     let mut status_line = OK_URL;
@@ -101,15 +118,18 @@ fn handle_connection(mut stream: TcpStream, dic_torrents: MutexTorrents, ip_port
         let details = match announce {
             Ok(announce) => {
                 let info_hash = announce.get_info_hash();
-                match dic_torrents.lock().unwrap().get_mut(&info_hash) {
-                    Some(torrent) => {
-                        let response = torrent.get_response_bencoded(announce.get_peer_id());
-                        torrent.add_peer(announce.get_peer_id(), announce);
-                        response
-                    }
-                    None => get_announce_error(PeerInfoError::InfoHashInvalid)
-                        .as_bytes()
-                        .to_vec(),
+                match dic_torrents.lock() {
+                    Ok(mut unlocked_dic) => match unlocked_dic.get_mut(&info_hash) {
+                        Some(torrent) => {
+                            let response = torrent.get_response_bencoded(announce.get_peer_id());
+                            torrent.add_peer(announce.get_peer_id(), announce);
+                            response
+                        }
+                        None => get_announce_error(PeerInfoError::InfoHashInvalid)
+                            .as_bytes()
+                            .to_vec(),
+                    },
+                    Err(_) => return Err(Box::new(ErrorMain::UnlockDicTorrent)),
                 }
             }
             Err(error) => get_announce_error(error).as_bytes().to_vec(),

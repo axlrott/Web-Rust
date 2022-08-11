@@ -106,8 +106,8 @@ fn get_event(name_event: String) -> Option<Event> {
 
 fn init_info_hash(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
     match init_command(announce, INFO_HASH.len(), INFO_HASH) {
-        Some(result) => {
-            let url_decoded = url_decoder(result);
+        Some(info_hash_url) => {
+            let url_decoded = url_decoder(info_hash_url);
             if url_decoded.len() != 20 {
                 Err(PeerInfoError::InfoHashInvalid)
             } else {
@@ -115,6 +115,20 @@ fn init_info_hash(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
             }
         }
         None => Err(PeerInfoError::InfoHashNotFound),
+    }
+}
+
+fn init_peer_id(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
+    match init_command(announce, PEER_ID.len(), PEER_ID) {
+        Some(peer_id_url) => {
+            let url_decoded = url_decoder(peer_id_url);
+            if url_decoded.len() != 20 {
+                Err(PeerInfoError::PeerId)
+            } else {
+                Ok(url_decoded)
+            }
+        }
+        None => Err(PeerInfoError::PeerId),
     }
 }
 
@@ -155,9 +169,9 @@ impl PeerInfo {
             Ok(result) => result,
             Err(error) => return Err(error),
         };
-        let peer_id = match init_command(&announce, PEER_ID.len(), PEER_ID) {
-            Some(result) => result,
-            None => return Err(PeerInfoError::PeerId),
+        let peer_id = match init_peer_id(&announce) {
+            Ok(result) => result,
+            Err(error) => return Err(error),
         };
         let port = match init_port(&announce) {
             Ok(result) => result,
