@@ -153,7 +153,6 @@ fn handle_connection(
     .as_bytes()
     .to_vec();
 
-    println!("CONT: {:?}", contents);
     response.append(&mut contents);
 
     stream.write_all(&response)?;
