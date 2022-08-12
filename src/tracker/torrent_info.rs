@@ -44,9 +44,7 @@ impl TorrentInfo {
         (complete, incomplete)
     }
 
-    //Devuelvo la respuesta en formato bencoding, pido la peer_id solicitante para no devolver la misma al
-    //dar la respuesta ya que puede que no sea la primera vez que se comunique y este incluido entre los peers.
-    pub fn get_response_bencoded(&self, peer_id: Vec<u8>) -> Vec<u8> {
+    fn get_response_no_compact(&self, peer_id: Vec<u8>) -> Vec<u8> {
         let (complete, incomplete) = self.get_complete_incomplete();
 
         let mut dic_to_bencode: HashMap<Vec<u8>, ValuesBencoding> = HashMap::new();
@@ -67,6 +65,9 @@ impl TorrentInfo {
                 continue;
             }
             if let Some(peer_info) = self.peers.get(key) {
+                if peer_info.is_stopped() {
+                    continue;
+                }
                 let sock_addr = peer_info.get_sock_addr();
                 let peer_id = key.clone();
                 let ip = sock_addr.ip().to_string().as_bytes().to_vec();
@@ -82,5 +83,56 @@ impl TorrentInfo {
         }
         dic_to_bencode.insert(PEERS_BYTES.to_vec(), ValuesBencoding::List(list_peers));
         from_dic(dic_to_bencode)
+    }
+
+    fn get_response_compact(&self, peer_id: Vec<u8>) -> Vec<u8> {
+        let (complete, incomplete) = self.get_complete_incomplete();
+
+        let mut dic_to_bencode: HashMap<Vec<u8>, ValuesBencoding> = HashMap::new();
+        let mut vec_u8_peers = vec![];
+
+        dic_to_bencode.insert(COMPLETE_BYTES.to_vec(), ValuesBencoding::Integer(complete));
+        dic_to_bencode.insert(
+            INCOMPLETE_BYTES.to_vec(),
+            ValuesBencoding::Integer(incomplete),
+        );
+        dic_to_bencode.insert(
+            INTERVAL_BYTES.to_vec(),
+            ValuesBencoding::Integer(self.interval),
+        );
+
+        for key in self.peers.keys() {
+            if key.clone() == peer_id {
+                continue;
+            }
+            if let Some(peer_info) = self.peers.get(key) {
+                if peer_info.is_stopped() {
+                    continue;
+                }
+                let sock_addr = peer_info.get_sock_addr();
+                for ip_num in sock_addr.ip().to_string().split('.') {
+                    if let Ok(ip_num) = ip_num.parse::<u8>() {
+                        vec_u8_peers.push(ip_num);
+                    };
+                }
+                if let Ok(port_num) = sock_addr.port().to_string().parse::<u16>() {
+                    let first_port = port_num / 256;
+                    let second_port = port_num % 256;
+                    vec_u8_peers.push(first_port as u8);
+                    vec_u8_peers.push(second_port as u8);
+                }
+            }
+        }
+        dic_to_bencode.insert(PEERS_BYTES.to_vec(), ValuesBencoding::String(vec_u8_peers));
+        from_dic(dic_to_bencode)
+    }
+
+    //Devuelvo la respuesta en formato bencoding, pido la peer_id solicitante para no devolver la misma al
+    //dar la respuesta ya que puede que no sea la primera vez que se comunique y este incluido entre los peers.
+    pub fn get_response_bencoded(&self, peer_id: Vec<u8>, is_compact: bool) -> Vec<u8> {
+        match is_compact {
+            true => self.get_response_compact(peer_id),
+            false => self.get_response_no_compact(peer_id),
+        }
     }
 }

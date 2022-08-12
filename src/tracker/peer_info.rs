@@ -235,13 +235,17 @@ impl PeerInfo {
         self.left == ZERO
     }
 
+    pub fn is_stopped(&self) -> bool {
+        matches!(self.event, Some(Event::Stopped))
+    }
+
     pub fn is_compact(&self) -> bool {
         match self.compact.clone() {
             Some(mut value) => match value.pop() {
                 Some(num) => num == b'1',
-                None => true,
+                None => false,
             },
-            None => true,
+            None => false,
         }
     }
 }

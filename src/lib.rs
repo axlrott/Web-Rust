@@ -112,6 +112,8 @@ fn handle_connection(
         fs::read(INDEX_HTML)?
     } else if buffer.starts_with(STATS_URL) {
         fs::read(STATS_HTML)?
+    } else if buffer.starts_with(CODE_URL) {
+        fs::read("js/code.js")?
     } else if buffer.starts_with(ANNOUNCE_URL) {
         //[TODO] Almacenar datos importantes [en .json?]
         let announce = PeerInfo::new(buffer.clone().to_vec(), ip_port);
@@ -121,7 +123,10 @@ fn handle_connection(
                 match dic_torrents.lock() {
                     Ok(mut unlocked_dic) => match unlocked_dic.get_mut(&info_hash) {
                         Some(torrent) => {
-                            let response = torrent.get_response_bencoded(announce.get_peer_id());
+                            let response = torrent.get_response_bencoded(
+                                announce.get_peer_id(),
+                                announce.is_compact(),
+                            );
                             torrent.add_peer(announce.get_peer_id(), announce);
                             response
                         }
@@ -148,6 +153,7 @@ fn handle_connection(
     .as_bytes()
     .to_vec();
 
+    println!("CONT: {:?}", contents);
     response.append(&mut contents);
 
     stream.write_all(&response)?;

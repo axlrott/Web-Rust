@@ -2,6 +2,7 @@ use std::ops::RangeInclusive;
 
 pub const GET_URL: &[u8; 16] = b"GET / HTTP/1.1\r\n";
 pub const ANNOUNCE_URL: &[u8; 13] = b"GET /announce";
+pub const CODE_URL: &[u8; 9] = b"GET /code";
 pub const STATS_URL: &[u8; 10] = b"GET /stats";
 pub const OK_URL: &str = "HTTP/1.1 200 OK";
 pub const ERR_URL: &str = "HTTP/1.1 404 NOT FOUND";
