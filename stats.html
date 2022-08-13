@@ -8,16 +8,31 @@
     <h1>Stats from Tracker</h1>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script>
     <body>
         <p>Look at this graph chart that doesn't represent anything!</p>
+        
         <canvas id="lineChart" style="width:100%;max-width:600px"></canvas>
+        <p></p>
+        <select id="longTimeLine", onchange="alertSelectedValueLine();"> 
+            <option value="lastHour"> Last hour </option>
+            <option value="fiveHours"> Last five hours </option>
+            <option value="lastDay"> Last day </option>
+            <option value="threeDays"> Last 3 days </option>
+        </select>
+        
         <canvas id="barChart" style="width:100%;max-width:600px"></canvas>
+        <p></p>
+        <select id="longTimeBar"> 
+            <option value="lastHour"> Last hour </option>
+            <option value="fiveHours"> Ultimas 5 horas </option>
+            <option value="lastDay"> Last day </option>
+            <option value="threeDays"> Last 3 days </option>
+        </select>
         <!--
             Para uso local y no web reemplazar usar src="js/code.js"
             Para uso web utilizar src="http://127.0.0.1:7878/code.js"
         -->
         <script src="js/code.js"></script>
      </body>
-
 </html>

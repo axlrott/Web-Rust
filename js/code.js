@@ -20,7 +20,17 @@ new Chart("lineChart", {
     scales: {
       xAxes: [{
         type: 'time',
-        distribution: 'linear'
+        distribution: 'linear',
+        time: {
+          displayFormats: {
+            'hour': 'HH:mm:ss',
+            'day': 'HH:mm',
+            'week': 'MMM DD',
+            'month': 'DD MMM YYYY',
+            'quarter': 'MMM YYYY',
+            'year': 'MMM YYYY',
+         }
+        }
       }]
     }
   }
@@ -44,8 +54,34 @@ new Chart("barChart", {
     scales: {
       xAxes: [{
         type: 'time',
-        distribution: 'linear'
+        distribution: 'linear',
+        time: {
+          displayFormats: {
+            'hour': 'HH:mm:ss',
+            'day': 'HH:mm',
+            'week': 'MMM DD',
+            'month': 'MMM YYYY',
+            'quarter': 'MMM YYYY',
+            'year': 'MMM YYYY',
+         }
+        }
       }]
     }
   }
 })
+
+function alertSelectedValueLine() {
+  var select = document.getElementById('longTimeLine');
+  var text = select.options[select.selectedIndex].text;
+  if (text == 'Last hour') {
+    alert("Se va a ver la ultima hora")
+  } else if (text == 'Last five hours') {
+    alert("Se van a ver las ultimas 5 horas")
+  } else if (text == 'Last day') {
+    alert("Se va a ver el ultimo dia")
+  } else {
+    alert("Se va a ver los ultimos 3 dias")
+    //Recarga la pagina
+    location.reload()
+  }
+}
