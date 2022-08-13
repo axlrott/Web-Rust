@@ -8,11 +8,12 @@
     <h1>Stats from Tracker</h1>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <!--https://cdn.jsdelivr.net/npm/chart.js-->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script>
     <body>
         <p>Look at this graph chart that doesn't represent anything!</p>
         
-        <canvas id="lineChart" style="width:100%;max-width:600px"></canvas>
+        <canvas id="lineChart" style="max-width:600px; max-height: 400px;"></canvas>
         <p></p>
         <select id="longTimeLine", onchange="alertSelectedValueLine();"> 
             <option value="lastHour"> Last hour </option>
@@ -21,11 +22,11 @@
             <option value="threeDays"> Last 3 days </option>
         </select>
         
-        <canvas id="barChart" style="width:100%;max-width:600px"></canvas>
+        <canvas id="barChart" style="max-width:600px; max-height: 400px"></canvas>
         <p></p>
-        <select id="longTimeBar"> 
+        <select id="longTimeBar", onchange="alertSelectedValueBar();"> 
             <option value="lastHour"> Last hour </option>
-            <option value="fiveHours"> Ultimas 5 horas </option>
+            <option value="fiveHours"> Last five hours </option>
             <option value="lastDay"> Last day </option>
             <option value="threeDays"> Last 3 days </option>
         </select>
