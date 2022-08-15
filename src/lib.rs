@@ -11,6 +11,8 @@ use std::{
     time::Duration,
 };
 
+use log::{error, info};
+
 use tracker::{
     constants::*,
     peer_info::{get_announce_error, PeerInfo, PeerInfoError},
@@ -35,6 +37,9 @@ impl fmt::Display for ErrorMain {
 impl Error for ErrorMain {}
 
 pub fn run() -> ResultEmpty {
+    pretty_env_logger::init();
+    info!("tracker init");
+
     let listener = TcpListener::bind("127.0.0.1:7878")?;
     //Esto es lo que hace que el accept devuelva error si nadie si conecto y no se quede esperando por una conexion
     let _ = listener.set_nonblocking(true);
@@ -54,28 +59,28 @@ pub fn run() -> ResultEmpty {
 
     let shutdown_copy = Arc::clone(&shutdown);
     thread::spawn(move || loop {
-        println!("Waiting for input");
+        info!("Waiting for input");
         let mut command = String::new();
         let _ = std::io::stdin().read_line(&mut command);
         if command == exit_command {
-            println!("Execute exit command");
+            info!("Execute exit command");
             match shutdown_copy.lock() {
                 Ok(mut mutex) => *mutex = true,
-                _ => println!("Error de unlock"), //Ver que hacer en casos de error
+                _ => error!("Error de unlock"), //Ver que hacer en casos de error
             }
         }
     });
     loop {
-        println!("Listening...");
+        info!("Listening...");
         match listener.accept() {
             //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
             Ok((stream, sock_addr)) => {
                 let dic_copy: MutexTorrents = Arc::clone(&mutex_torrents);
-                println!("Conected to {}", sock_addr);
+                info!("Conected to {}", sock_addr);
                 pool.execute(move || {
                     match handle_connection(stream, dic_copy, sock_addr) {
                         Ok(_) => (),
-                        Err(error) => println!("{}", error), //Ver que hacer es casos de error
+                        Err(error) => error!("{}", error), //Ver que hacer es casos de error
                     }
                 });
             }
