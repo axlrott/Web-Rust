@@ -70,8 +70,9 @@ pub fn run() -> ResultEmpty {
             }
         }
     });
+
+    info!("Listening...");
     loop {
-        info!("Listening...");
         match listener.accept() {
             //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
             Ok((stream, sock_addr)) => {
