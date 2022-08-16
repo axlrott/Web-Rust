@@ -226,7 +226,7 @@ impl PeerInfo {
     }
 }
 
-pub fn get_announce_error(error: PeerInfoError) -> String {
+pub fn get_error_response_for_announce(error: PeerInfoError) -> String {
     match error {
         PeerInfoError::InfoHashNotFound => ERROR_INFO_HASH_NOT_FOUND.to_owned(),
         PeerInfoError::InfoHashInvalid => ERROR_INFO_HASH_INVALID.to_owned(),
