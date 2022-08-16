@@ -85,10 +85,10 @@ fn init_handler_for_quit_input(global_shutdown: Arc<RwLock<bool>>) {
 
 fn is_global_shutdown_set(global_shutdown: &Arc<RwLock<bool>>) -> bool {
     if let Ok(mutex_sutdown) = global_shutdown.read() {
-        return *mutex_sutdown;
+        *mutex_sutdown
     } else {
-        return true; // Si el global shutdown está poisoned, hay que cortar todo igual
-    };
+        true // Si el global shutdown está poisoned, hay que cortar todo igual
+    }
 }
 
 fn set_global_shutdown(global_shutdown: &Arc<RwLock<bool>>) -> ResultDyn<()> {

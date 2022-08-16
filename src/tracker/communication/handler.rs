@@ -26,7 +26,7 @@ fn get_response_details(
     dic_torrents: &ArcMutexOfTorrents,
     ip_port: SocketAddr,
 ) -> ResultDyn<Vec<u8>> {
-    let info_of_announced_peer = PeerInfo::new(buffer.clone().to_vec(), ip_port);
+    let info_of_announced_peer = PeerInfo::new((*buffer).to_vec(), ip_port);
 
     let details = match info_of_announced_peer {
         Ok(info_of_announced_peer) => {
