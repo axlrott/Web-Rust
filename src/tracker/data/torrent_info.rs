@@ -1,5 +1,5 @@
 use super::{
-    bencoding::{encoder::from_dic, values::ValuesBencoding},
+    super::bencoding::{encoder::from_dic, values::ValuesBencoding},
     constants::*,
     peer_info::PeerInfo,
 };

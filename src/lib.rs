@@ -1,26 +1,46 @@
+//! # FA-torrent
+//! ## Grupo - Ferris Appreciators
+//! ### Objetivo del agregado
+//!
+//! El objetivo del agregado es implementar un Cliente de BitTorrent con funcionalidades acotadas, detalladas [aquí](https://taller-1-fiuba-rust.github.io/proyecto/22C1/proyecto.html).
+//!
+//!
+//! Primera versión (checkpoint release):
+//!
+//! - Recibir por linea de comandos la ruta de un archivo .torrent
+//! - Dicho .torrent es leído y decodificado según el estándar y su información almacenada.
+//! - Se conecta al Tracker obtenido en el .torrent y se comunica con el mismo, decodifica su respuesta y obtiene una lista de peers.
+//! - Se conecta con un peer y realiza la comunicación completa con el mismo para poder descargar una pieza del torrent.
+//! - La pieza descargada es validada internamente, pero puede verificarse también por medio del script sha1sum de linux.
+//!
+//! Segunda versión:
+//!
+//! - Permite recibir por linea de comandos la ruta de uno o más archivos ".torrent"; o un la ruta a un directorio con ellos.
+//! - Se ensamblan las piezas de cada torrent para obtener el archivo completo.
+//! - Funciona como server, es decir, responde a requests de piezas.
+//! - Cuenta con interfaz gráfica.
+//! - Cuénta con un logger en archivos que indica cuándo se descargan las piezas (y adicionalmente se loggean errores importantes).
+//! - Se pueden customizar el puerto en el que se escuchan peticiones, directorio de descargas y de logs mediante un archivo config.txt
+//! - Puede descargar más de un torrent concurrentemente, y por cada uno de esos torrents puede descargar más de una pieza de la misma forma. A su vez puede ser server de otros peers.
+//!
+//!
+
 pub mod tracker;
 
 use std::{
     collections::HashMap,
     error::Error,
-    fmt, fs,
-    io::{ErrorKind, Read, Write},
-    net::{SocketAddr, TcpListener, TcpStream},
-    sync::{Arc, Mutex},
+    fmt,
+    net::TcpListener,
+    sync::{Arc, RwLock},
     thread,
-    time::Duration,
 };
 
 use log::{error, info};
 
-use tracker::{
-    constants::*,
-    peer_info::{get_error_response_for_announce, PeerInfo, PeerInfoError},
-    thread_pool::ThreadPool,
-    torrent_info::TorrentInfo,
-};
+use tracker::{communication, data::torrent_info::TorrentInfo};
 
-type ArcMutexOfTorrents = Arc<Mutex<HashMap<Vec<u8>, TorrentInfo>>>;
+type ArcMutexOfTorrents = Arc<RwLock<HashMap<Vec<u8>, TorrentInfo>>>;
 type ResultDyn<T> = Result<T, Box<dyn Error>>;
 
 #[derive(Debug)]
@@ -46,11 +66,11 @@ fn init_torrents() -> ArcMutexOfTorrents {
     // ...
     // ...
 
-    //Mutex de un diccionario que contiene los TorrentInfo
-    Arc::new(Mutex::new(dic_torrents))
+    //RwLock de un diccionario que contiene los TorrentInfo
+    Arc::new(RwLock::new(dic_torrents))
 }
 
-fn init_handler_for_quit_input(global_shutdown: Arc<Mutex<bool>>) {
+fn init_handler_for_quit_input(global_shutdown: Arc<RwLock<bool>>) {
     let exit_command = String::from("q\n");
     info!("Waiting for input");
     thread::spawn(move || loop {
@@ -58,7 +78,7 @@ fn init_handler_for_quit_input(global_shutdown: Arc<Mutex<bool>>) {
         let _ = std::io::stdin().read_line(&mut command);
         if command == exit_command {
             info!("Executing quit command");
-            match global_shutdown.lock() {
+            match global_shutdown.write() {
                 Ok(mut mutex) => *mutex = true,
                 _ => error!("Error de unlock"), //Ver que hacer en casos de error
             }
@@ -66,127 +86,35 @@ fn init_handler_for_quit_input(global_shutdown: Arc<Mutex<bool>>) {
     });
 }
 
-fn get_response_details(
-    buffer: &[u8],
-    dic_torrents: &ArcMutexOfTorrents,
-    ip_port: SocketAddr,
-) -> ResultDyn<Vec<u8>> {
-    let info_of_announced_peer = PeerInfo::new(buffer.clone().to_vec(), ip_port);
-
-    let details = match info_of_announced_peer {
-        Ok(info_of_announced_peer) => {
-            let info_hash = info_of_announced_peer.get_info_hash();
-            match dic_torrents.lock() {
-                Ok(mut unlocked_dic) => match unlocked_dic.get_mut(&info_hash) {
-                    Some(torrent) => {
-                        let response = torrent.get_bencoded_response_for_announce(
-                            info_of_announced_peer.get_peer_id(),
-                            info_of_announced_peer.is_compact(),
-                        );
-                        torrent
-                            .add_peer(info_of_announced_peer.get_peer_id(), info_of_announced_peer);
-                        response
-                    }
-                    None => get_error_response_for_announce(PeerInfoError::InfoHashInvalid)
-                        .as_bytes()
-                        .to_vec(),
-                },
-                Err(_) => return Err(Box::new(TrackerError::UnlockingMutexOfTorrents)), // Como este es error de nuestro server podriamos considerar cambiarlo a un error de codigo 500 por ej, sino el peer no se entera de nada y le cortamos de repente
-            }
-        }
-        Err(error) => get_error_response_for_announce(error).as_bytes().to_vec(),
+fn is_global_shutdown_set(global_shutdown: &Arc<RwLock<bool>>) -> bool {
+    if let Ok(mutex_sutdown) = global_shutdown.read() {
+        return *mutex_sutdown;
+    } else {
+        return true; // Si el global shutdown está poisoned, hay que cortar todo igual
     };
-    Ok(details)
 }
 
-fn handle_single_connection(
-    mut stream: TcpStream,
-    dic_torrents: ArcMutexOfTorrents,
-    ip_port: SocketAddr,
-) -> ResultDyn<()> {
-    let mut buffer = [0; 1024];
-    let _ = stream.read(&mut buffer);
-    let mut status_line = OK_URL;
-
-    let mut contents = if buffer.starts_with(GET_URL) {
-        fs::read(INDEX_HTML)?
-    } else if buffer.starts_with(STATS_URL) {
-        fs::read(STATS_HTML)?
-    } else if buffer.starts_with(CODE_URL) {
-        fs::read("js/code.js")?
-    } else if buffer.starts_with(ANNOUNCE_URL) {
-        //[TODO] Almacenar datos importantes [en .json?]
-        get_response_details(&buffer, &dic_torrents, ip_port)?
-    } else {
-        status_line = ERR_URL;
-        fs::read(ERROR_HTML)?
-    };
-
-    let mut response = format!(
-        "{}\r\nContent-Length: {}\r\n\r\n",
-        status_line,
-        contents.len(),
-    )
-    .as_bytes()
-    .to_vec();
-
-    response.append(&mut contents);
-
-    stream.write_all(&response)?;
-    stream.flush()?;
+fn set_global_shutdown(global_shutdown: &Arc<RwLock<bool>>) -> ResultDyn<()> {
+    let mut global_shutdown = global_shutdown.write().map_err(|err| format!("{}", err))?;
+    *global_shutdown = true;
     Ok(())
 }
 
-fn handle_general_communication(
-    listener: TcpListener,
-    mutex_of_torrents: ArcMutexOfTorrents,
-    global_shutdown: Arc<Mutex<bool>>,
-) {
-    let pool = ThreadPool::new(4);
-
-    loop {
-        match listener.accept() {
-            //Uso accept para obtener tambien la ip y el puerto de quien se conecto con el tracker
-            Ok((stream, sock_addr)) => {
-                let dic_copy: ArcMutexOfTorrents = Arc::clone(&mutex_of_torrents);
-                info!(
-                    "Connected to  [ {} : {} ]",
-                    sock_addr.ip(),
-                    sock_addr.port()
-                );
-                pool.execute(move || {
-                    match handle_single_connection(stream, dic_copy, sock_addr) {
-                        Ok(_) => (),
-                        Err(error) => error!("{}", error), //Ver que hacer es casos de error
-                    }
-                });
-            }
-            Err(error) => {
-                if error.kind() == ErrorKind::WouldBlock {
-                    match global_shutdown.lock() {
-                        Ok(mutex_sutdown) => {
-                            if *mutex_sutdown {
-                                break;
-                            }
-                        }
-                        _ => break,
-                    }
-                    //Por cada vez que no conecto espero 1 seg a la siguiente request
-                    //Para no estar loopeando tan rapidamente y que explote la maquina.
-                    thread::sleep(Duration::from_secs(1));
-                }
-            }
-        };
-    }
-}
-
+///
+/// FUNCION PRINCIPAL PARA LA EJECUCION DEL PROGRAMA
+///
+///
+///
+/// ... (Despues se puede ver si permitimos tener una especie de tracker dinamico con torrents adicionales)
+/// Devuelve un Error si hubo algún problema durante todo el proceso.
+///
 pub fn run() -> ResultDyn<()> {
     // Hay que ver a lo ultimo si se pueden hacer refactors sobre los errores asi no devolvemos Box dyn
 
     pretty_env_logger::init();
     info!("tracker init");
 
-    let global_shutdown = Arc::new(Mutex::new(false));
+    let global_shutdown = Arc::new(RwLock::new(false));
 
     let mutex_of_torrents: ArcMutexOfTorrents = init_torrents();
 
@@ -196,7 +124,7 @@ pub fn run() -> ResultDyn<()> {
     let listener = TcpListener::bind("127.0.0.1:7878")?;
     let _ = listener.set_nonblocking(true);
     info!("Listening...");
-    handle_general_communication(listener, mutex_of_torrents, global_shutdown);
+    communication::handler::general_communication(listener, mutex_of_torrents, global_shutdown);
 
     Ok(())
 }

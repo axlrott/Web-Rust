@@ -1,4 +1,4 @@
-use super::{constants::*, urlencoding};
+use super::{super::urlencoding, constants::*};
 use std::net::SocketAddr;
 
 pub enum Event {
