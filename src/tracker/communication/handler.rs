@@ -67,8 +67,12 @@ fn handle_single_connection(
         fs::read(INDEX_HTML)?
     } else if buffer.starts_with(STATS_URL) {
         fs::read(STATS_HTML)?
+    } else if buffer.starts_with(STYLE_URL) {
+        fs::read(STYLE_CSS)?
+    } else if buffer.starts_with(DOCS_URL) {
+        fs::read(DOCS_HTML)?
     } else if buffer.starts_with(CODE_URL) {
-        fs::read("js/code.js")?
+        fs::read(CODE_JS)?
     } else if buffer.starts_with(ANNOUNCE_URL) {
         //[TODO] Almacenar datos importantes [en .json?]
         get_response_details(&buffer, &dic_torrents, ip_port)?
