@@ -36,7 +36,7 @@ use std::{
     thread,
 };
 
-use log::{error, info};
+use log::info;
 
 use tracker::{communication, data::torrent_info::TorrentInfo};
 
@@ -78,10 +78,7 @@ fn init_handler_for_quit_input(global_shutdown: Arc<RwLock<bool>>) {
         let _ = std::io::stdin().read_line(&mut command);
         if command == exit_command {
             info!("Executing quit command");
-            match global_shutdown.write() {
-                Ok(mut mutex) => *mutex = true,
-                _ => error!("Error de unlock"), //Ver que hacer en casos de error
-            }
+            let _ = set_global_shutdown(&global_shutdown); // Revisar que hacer con el error que surge de aca.
         }
     });
 }
