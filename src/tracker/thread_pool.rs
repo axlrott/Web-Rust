@@ -1,3 +1,4 @@
+use log::info;
 use std::{
     sync::{
         mpsc::{self, Receiver},
@@ -25,11 +26,11 @@ impl Worker {
                     let message = receiver.recv();
                     match message {
                         Ok(Message::NewJob(job)) => {
-                            println!("Worker {} got a job; executing.", id);
+                            info!("Worker {} got a job; executing.", id);
                             job();
                         }
                         Ok(Message::Terminate) => {
-                            println!("Worker {} was told to terminate.", id);
+                            info!("Worker {} was told to terminate.", id);
                             break;
                         }
                         Err(_) => break, //Ver como informar este error
@@ -77,10 +78,10 @@ impl Drop for ThreadPool {
             let _ = self.sender.send(Message::Terminate);
         }
 
-        println!("Shutting down all workers");
+        info!("Shutting down all workers");
 
         for worker in &mut self.workers {
-            println!("Shutting down worker {}", worker.id);
+            info!("Shutting down worker {}", worker.id);
             if let Some(thread) = worker.thread.take() {
                 let _ = thread.join();
             }

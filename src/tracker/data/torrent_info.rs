@@ -1,5 +1,5 @@
 use super::{
-    bencoding::{encoder::from_dic, values::ValuesBencoding},
+    super::bencoding::{encoder::from_dic, values::ValuesBencoding},
     constants::*,
     peer_info::PeerInfo,
 };
@@ -31,7 +31,7 @@ impl TorrentInfo {
         self.peers.insert(peer_id, peer_info);
     }
 
-    fn get_complete_incomplete(&self) -> (i64, i64) {
+    fn get_number_of_complete_and_incomplete_peers(&self) -> (i64, i64) {
         let mut complete = 0;
         let mut incomplete = 0;
         for peer in self.peers.values() {
@@ -45,7 +45,7 @@ impl TorrentInfo {
     }
 
     fn get_response_no_compact(&self, peer_id: Vec<u8>) -> Vec<u8> {
-        let (complete, incomplete) = self.get_complete_incomplete();
+        let (complete, incomplete) = self.get_number_of_complete_and_incomplete_peers();
 
         let mut dic_to_bencode: HashMap<Vec<u8>, ValuesBencoding> = HashMap::new();
         let mut list_peers: Vec<ValuesBencoding> = vec![];
@@ -86,7 +86,7 @@ impl TorrentInfo {
     }
 
     fn get_response_compact(&self, peer_id: Vec<u8>) -> Vec<u8> {
-        let (complete, incomplete) = self.get_complete_incomplete();
+        let (complete, incomplete) = self.get_number_of_complete_and_incomplete_peers();
 
         let mut dic_to_bencode: HashMap<Vec<u8>, ValuesBencoding> = HashMap::new();
         let mut vec_u8_peers = vec![];
@@ -129,7 +129,11 @@ impl TorrentInfo {
 
     //Devuelvo la respuesta en formato bencoding, pido la peer_id solicitante para no devolver la misma al
     //dar la respuesta ya que puede que no sea la primera vez que se comunique y este incluido entre los peers.
-    pub fn get_response_bencoded(&self, peer_id: Vec<u8>, is_compact: bool) -> Vec<u8> {
+    pub fn get_bencoded_response_for_announce(
+        &self,
+        peer_id: Vec<u8>,
+        is_compact: bool,
+    ) -> Vec<u8> {
         match is_compact {
             true => self.get_response_compact(peer_id),
             false => self.get_response_no_compact(peer_id),

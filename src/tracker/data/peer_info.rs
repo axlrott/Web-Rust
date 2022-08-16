@@ -1,4 +1,4 @@
-use super::constants::*;
+use super::{super::urlencoding, constants::*};
 use std::net::SocketAddr;
 
 pub enum Event {
@@ -30,30 +30,6 @@ pub struct PeerInfo {
     //OPCIONALES DE ANNOUNCE
     compact: Option<Vec<u8>>,
     event: Option<Event>,
-}
-
-fn url_decoder(url: Vec<u8>) -> Vec<u8> {
-    let mut counter = 0;
-    let mut hex = String::new();
-    let mut vec_res = vec![];
-    for byte in url {
-        if byte == b'%' {
-            counter = 2;
-            continue;
-        } else if counter > 0 {
-            hex.push(byte as char);
-            counter -= 1;
-            if counter == 0 {
-                if let Ok(num) = u8::from_str_radix(&hex, 16) {
-                    vec_res.push(num)
-                };
-                hex = String::new();
-            };
-        } else {
-            vec_res.push(byte);
-        }
-    }
-    vec_res
 }
 
 fn find_index_msg(response: &[u8], size: usize, end_line: &[u8]) -> Option<usize> {
@@ -107,7 +83,7 @@ fn get_event(name_event: String) -> Option<Event> {
 fn init_info_hash(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
     match init_command(announce, INFO_HASH.len(), INFO_HASH) {
         Some(info_hash_url) => {
-            let url_decoded = url_decoder(info_hash_url);
+            let url_decoded = urlencoding::decoder::from_url(info_hash_url);
             if url_decoded.len() != 20 {
                 Err(PeerInfoError::InfoHashInvalid)
             } else {
@@ -121,7 +97,7 @@ fn init_info_hash(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
 fn init_peer_id(announce: &[u8]) -> Result<Vec<u8>, PeerInfoError> {
     match init_command(announce, PEER_ID.len(), PEER_ID) {
         Some(peer_id_url) => {
-            let url_decoded = url_decoder(peer_id_url);
+            let url_decoded = urlencoding::decoder::from_url(peer_id_url);
             if url_decoded.len() != 20 {
                 Err(PeerInfoError::PeerId)
             } else {
@@ -250,7 +226,7 @@ impl PeerInfo {
     }
 }
 
-pub fn get_announce_error(error: PeerInfoError) -> String {
+pub fn get_error_response_for_announce(error: PeerInfoError) -> String {
     match error {
         PeerInfoError::InfoHashNotFound => ERROR_INFO_HASH_NOT_FOUND.to_owned(),
         PeerInfoError::InfoHashInvalid => ERROR_INFO_HASH_INVALID.to_owned(),

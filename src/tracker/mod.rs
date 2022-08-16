@@ -1,5 +1,5 @@
 pub mod bencoding;
-pub mod constants;
-pub mod peer_info;
+pub mod communication;
+pub mod data;
 pub mod thread_pool;
-pub mod torrent_info;
+mod urlencoding;
