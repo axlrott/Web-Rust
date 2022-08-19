@@ -33,7 +33,7 @@ use std::{
     fmt,
     net::TcpListener,
     sync::{Arc, RwLock},
-    thread,
+    thread::{self, JoinHandle},
 };
 
 use log::info;
@@ -70,7 +70,7 @@ fn init_torrents() -> ArcMutexOfTorrents {
     Arc::new(RwLock::new(dic_torrents))
 }
 
-fn init_handler_for_quit_input(global_shutdown: Arc<RwLock<bool>>) {
+fn init_handler_for_quit_input(global_shutdown: Arc<RwLock<bool>>) -> JoinHandle<()> {
     let exit_command = String::from("q\n");
     info!("Waiting for input");
     thread::spawn(move || loop {
@@ -79,8 +79,9 @@ fn init_handler_for_quit_input(global_shutdown: Arc<RwLock<bool>>) {
         if command == exit_command {
             info!("Executing quit command");
             let _ = set_global_shutdown(&global_shutdown); // Revisar que hacer con el error que surge de aca.
+            break;
         }
-    });
+    })
 }
 
 fn is_global_shutdown_set(global_shutdown: &Arc<RwLock<bool>>) -> bool {
@@ -115,13 +116,15 @@ pub fn run() -> ResultDyn<()> {
 
     let mutex_of_torrents: ArcMutexOfTorrents = init_torrents();
 
-    init_handler_for_quit_input(Arc::clone(&global_shutdown));
+    let join_hander = init_handler_for_quit_input(Arc::clone(&global_shutdown));
 
     // Nota (Miguel): Por las dudas al pasarlo al otro lado, despues usar el try bind del tp viejo.
     let listener = TcpListener::bind("127.0.0.1:7878")?;
     let _ = listener.set_nonblocking(true);
     info!("Listening...");
     communication::handler::general_communication(listener, mutex_of_torrents, global_shutdown);
+
+    let _ = join_hander.join();
 
     Ok(())
 }
